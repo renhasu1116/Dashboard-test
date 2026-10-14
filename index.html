@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>週間習慣トラッキング ダッシュボード (iPhoneヘルスケア連携対応)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            darkBg: '#0f172a',
+            darkCard: '#1e293b',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pop {
+      0% { transform: scale(0.8); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .animate-pop {
+      animation: pop 0.25s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-darkBg text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans pb-16">
+
+  <!-- ヘッダー -->
+  <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-darkCard/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30">
+          ✓
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Habit Tracker Pro</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400" id="currentDateDisplay">iPhone ヘルスケア自動判定対応</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="syncGuideBtn" class="px-3 py-2 rounded-lg text-xs font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition flex items-center gap-1.5">
+          <span>⌚</span> iPhone連携URLテスト
+        </button>
+        <button id="themeToggle" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="テーマ切替">
+          <span id="themeIcon">🌙</span>
+        </button>
+        <button id="resetDataBtn" class="px-3 py-2 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+          初期状態に戻す
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 mt-6 space-y-6">
+
+    <!-- 通知トースト -->
+    <div id="syncToast" class="hidden bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span>✨</span>
+        <span id="syncToastMsg">iPhoneヘルスケアデータから自動判定を実行しました！</span>
+      </div>
+      <button onclick="document.getElementById('syncToast').classList.add('hidden')" class="text-xs opacity-70 hover:opacity-100">✕</button>
+    </div>
+
+    <!-- iPhone フィットネス & 睡眠 自動連携コントロールパネル -->
+    <section class="bg-white dark:bg-darkCard rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">🍎</span>
+          <h2 class="font-bold text-base">iPhone ヘルスケア自動クリア判定（今日：<span id="todayLabel" class="text-indigo-500"></span>）</h2>
+        </div>
+        <span class="text-xs text-slate-500 dark:text-slate-400">※スライダーを動かすかURLパラメータを渡すと自動でチェックが反映されます</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- ムーブゴール連動カード -->
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 flex flex-col justify-between gap-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 mb-1">
+                🔥 フィットネス連携
+              </span>
+              <h3 class="font-bold text-sm">ムーブゴール達成 ➔ 「ジム・ワークアウト」自動クリア</h3>
+            </div>
+            <span id="moveStatusBadge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+              未達成
+            </span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span>現在のムーブ: <strong id="moveCurrentVal" class="text-rose-500 text-sm">420</strong> kcal</span>
+              <span>ゴール: <input type="number" id="moveGoalInput" value="500" class="w-16 px-1.5 py-0.5 text-right rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"> kcal</span>
+            </div>
+            <input type="range" id="moveSlider" min="0" max="1000" step="10" value="420" class="w-full accent-rose-500 cursor-pointer">
+          </div>
+        </div>
+
+        <!-- 睡眠時間連動カード -->
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 flex flex-col justify-between gap-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 mb-1">
+                🛏️ 睡眠データ連携
+              </span>
+              <h3 class="font-bold text-sm">睡眠 7.0時間超え ➔ 「デジタルデトックス」自動クリア</h3>
+            </div>
+            <span id="sleepStatusBadge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+              未達成
+            </span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span>昨夜の睡眠時間: <strong id="sleepCurrentVal" class="text-cyan-500 text-sm">6.5</strong> 時間</span>
+              <span class="text-slate-400">条件: 7.0時間以上（&gt; 7h）</span>
+            </div>
+            <input type="range" id="sleepSlider" min="3" max="10" step="0.25" value="6.5" class="w-full accent-cyan-500 cursor-pointer">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI サマリー -->
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-white dark:bg-darkCard rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">週間トータル達成率</p>
+          <p class="text-3xl font-extrabold mt-1" id="weeklyRateText">0%</p>
+          <p class="text-xs text-slate-400 mt-1" id="weeklyCountText">0 / 0 完了</p>
+        </div>
+        <div class="w-16 h-16 rounded-full border-4 border-indigo-500/20 flex items-center justify-center font-bold text-indigo-500" id="weeklyRing">
+          0%
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-darkCard rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">今日の達成状況</p>
+          <p class="text-3xl font-extrabold mt-1" id="todayCountText">0 / 0</p>
+          <p class="text-xs text-emerald-500 mt-1" id="todaySubText">自動連携 2項目を含む</p>
+        </div>
+        <div class="text-3xl">🎯</div>
+      </div>
+
+      <div class="bg-white dark:bg-darkCard rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">最長連続ストリーク</p>
+          <p class="text-3xl font-extrabold mt-1"><span id="bestStreakText">0</span> 日</p>
+          <p class="text-xs text-amber-500 mt-1">継続は力なり！</p>
+        </div>
+        <div class="text-3xl">🔥</div>
+      </div>
+    </section>
+
+    <!-- 習慣マトリクステーブル -->
+    <section class="bg-white dark:bg-darkCard rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <h2 class="font-bold text-base">週間トラッキングシート（月〜日）</h2>
+        <div class="flex gap-2">
+          <input type="text" id="newHabitInput" placeholder="新しい習慣を追加..." class="px-3 py-1.5 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button id="addHabitBtn" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
+            ＋ 追加
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/40" id="dayHeaderRow">
+              <th class="py-3 px-4 min-w-[220px]">習慣項目</th>
+              <!-- 曜日ヘッダーはJSで描画 -->
+            </tr>
+          </thead>
+          <tbody id="habitTableBody" class="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+            <!-- JSで描画 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 曜日別達成率バーチャート -->
+    <section class="bg-white dark:bg-darkCard rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
+      <h2 class="font-bold text-base mb-4">曜日別 達成率チャート</h2>
+      <div class="grid grid-cols-7 gap-3 items-end h-36 pt-4 px-2" id="dailyBarChart">
+        <!-- JSで描画 -->
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const DAYS = ['月', '火', '水', '木', '金', '土', '日'];
+    const STORAGE_KEY = 'habit_tracker_health_v2';
+    const HEALTH_STORAGE_KEY = 'habit_tracker_health_metrics_v2';
+
+    // 今日のインデックス (月曜=0 ... 日曜=6)
+    function getTodayIndex() {
+      const jsDay = new Date().getDay(); // 0:日, 1:月 ... 6:土
+      return jsDay === 0 ? 6 : jsDay - 1;
+    }
+
+    const todayIdx = getTodayIndex();
+    document.getElementById('todayLabel').textContent = DAYS[todayIdx] + '曜日';
+
+    // 初期データ（ジムとデジタルデトックスに autoRule を設定）
+    const defaultHabits = [
+      {
+        id: 'gym',
+        name: 'ジム・ワークアウト',
+        icon: '💪',
+        autoRule: 'move_goal',
+        autoBadge: '⚡ ムーブゴール自動連携',
+        days: [true, false, true, false, false, false, false]
+      },
+      {
+        id: 'detox',
+        name: 'デジタルデトックス',
+        icon: '📵',
+        autoRule: 'sleep_7h',
+        autoBadge: '⚡ 睡眠>7h自動連携',
+        days: [true, true, false, false, false, false, false]
+      },
+      {
+        id: 'linuc',
+        name: 'LinuC 学習（Ping-t 演習）',
+        icon: '🐧',
+        autoRule: null,
+        days: [true, true, true, false, false, false, false]
+      },
+      {
+        id: 'reading',
+        name: '読書・技術記事チェック',
+        icon: '📚',
+        autoRule: null,
+        days: [false, true, true, false, false, false, false]
+      },
+      {
+        id: 'water',
+        name: '水分補給（2L）',
+        icon: '💧',
+        autoRule: null,
+        days: [true, true, true, false, false, false, false]
+      }
+    ];
+
+    let habits = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultHabits;
+    let healthMetrics = JSON.parse(localStorage.getItem(HEALTH_STORAGE_KEY)) || {
+      moveCalories: 420,
+      moveGoal: 500,
+      sleepHours: 6.5
+    };
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+      localStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(healthMetrics));
+    }
+
+    // ストリーク計算
+    function calcStreak(daysArr) {
+      let streak = 0;
+      for (let i = todayIdx; i >= 0; i--) {
+        if (daysArr[i]) streak++;
+        else break;
+      }
+      return streak;
+    }
+
+    // ヘルスケア条件に基づく自動クリア判定
+    function evaluateHealthAutoRules(showNotification = false) {
+      const isMoveCleared = healthMetrics.moveCalories >= healthMetrics.moveGoal && healthMetrics.moveGoal > 0;
+      // 「7時間を超えていたら」(> 7.0) または 7時間以上
+      const isSleepCleared = healthMetrics.sleepHours > 7.0;
+
+      // バッジ表示の更新
+      const moveBadge = document.getElementById('moveStatusBadge');
+      if (isMoveCleared) {
+        moveBadge.textContent = '✓ クリア済 (自動ON)';
+        moveBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-rose-500 text-white';
+      } else {
+        moveBadge.textContent = '未達成';
+        moveBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+      }
+
+      const sleepBadge = document.getElementById('sleepStatusBadge');
+      if (isSleepCleared) {
+        sleepBadge.textContent = '✓ 7h超え達成 (自動ON)';
+        sleepBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-cyan-500 text-white';
+      } else {
+        sleepBadge.textContent = '7h以下';
+        sleepBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+      }
+
+      // 該当習慣の今日のチェックを自動更新
+      let updatedNames = [];
+      habits.forEach(habit => {
+        if (habit.autoRule === 'move_goal') {
+          if (isMoveCleared && !habit.days[todayIdx]) {
+            habit.days[todayIdx] = true;
+            updatedNames.push(habit.name);
+          } else if (!isMoveCleared && habit.days[todayIdx]) {
+            habit.days[todayIdx] = false;
+          }
+        }
+        if (habit.autoRule === 'sleep_7h') {
+          if (isSleepCleared && !habit.days[todayIdx]) {
+            habit.days[todayIdx] = true;
+            updatedNames.push(habit.name);
+          } else if (!isSleepCleared && habit.days[todayIdx]) {
+            habit.days[todayIdx] = false;
+          }
+        }
+      });
+
+      if (showNotification && updatedNames.length > 0) {
+        const toast = document.getElementById('syncToast');
+        const msg = document.getElementById('syncToastMsg');
+        msg.textContent = `条件達成により「${updatedNames.join('」「')}」を自動でクリアにしました！`;
+        toast.classList.remove('hidden');
+      }
+
+      saveData();
+      renderAll();
+    }
+
+    // URLパラメータ (?move=600&goal=500&sleep=7.5) の読み取り
+    function checkUrlParamsForHealthSync() {
+      const params = new URLSearchParams(window.location.search);
+      let hasParam = false;
+
+      if (params.has('goal')) {
+        healthMetrics.moveGoal = parseFloat(params.get('goal')) || 500;
+        hasParam = true;
+      }
+      if (params.has('move')) {
+        healthMetrics.moveCalories = parseFloat(params.get('move')) || 0;
+        hasParam = true;
+      }
+      if (params.has('move_cleared') && params.get('move_cleared') === '1') {
+        healthMetrics.moveCalories = healthMetrics.moveGoal;
+        hasParam = true;
+      }
+      if (params.has('sleep')) {
+        healthMetrics.sleepHours = parseFloat(params.get('sleep')) || 0;
+        hasParam = true;
+      }
+
+      // UIスライダーに反映
+      document.getElementById('moveSlider').value = healthMetrics.moveCalories;
+      document.getElementById('moveCurrentVal').textContent = healthMetrics.moveCalories;
+      document.getElementById('moveGoalInput').value = healthMetrics.moveGoal;
+      document.getElementById('sleepSlider').value = healthMetrics.sleepHours;
+      document.getElementById('sleepCurrentVal').textContent = healthMetrics.sleepHours;
+
+      evaluateHealthAutoRules(hasParam);
+    }
+
+    // 描画処理
+    function renderAll() {
+      // 1. 曜日ヘッダー描画
+      const headerRow = document.getElementById('dayHeaderRow');
+      headerRow.innerHTML = `<th class="py-3 px-4 min-w-[240px]">習慣項目</th>`;
+      DAYS.forEach((d, idx) => {
+        const isToday = idx === todayIdx;
+        headerRow.innerHTML += `
+          <th class="py-3 px-2 text-center w-12 ${isToday ? 'text-indigo-500 font-bold bg-indigo-500/10' : ''}">
+            ${d}${isToday ? '<div class="text-[10px] leading-none mt-0.5">今日</div>' : ''}
+          </th>
+        `;
+      });
+      headerRow.innerHTML += `
+        <th class="py-3 px-3 text-center">ストリーク</th>
+        <th class="py-3 px-3 text-center">週間達成</th>
+        <th class="py-3 px-3 text-center">削除</th>
+      `;
+
+      // 2. テーブル本体描画
+      const tbody = document.getElementById('habitTableBody');
+      tbody.innerHTML = '';
+
+      let totalChecks = 0;
+      let todayChecks = 0;
+      let bestStreak = 0;
+
+      habits.forEach((habit, hIdx) => {
+        const doneCount = habit.days.filter(Boolean).length;
+        totalChecks += doneCount;
+        if (habit.days[todayIdx]) todayChecks++;
+
+        const streak = calcStreak(habit.days);
+        if (streak > bestStreak) bestStreak = streak;
+        const rate = Math.round((doneCount / 7) * 100);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition';
+
+        let dayCells = '';
+        habit.days.forEach((checked, dIdx) => {
+          const isToday = dIdx === todayIdx;
+          dayCells += `
+            <td class="py-3 px-2 text-center ${isToday ? 'bg-indigo-500/5' : ''}">
+              <button onclick="toggleCheck(${hIdx}, ${dIdx})"
+                class="w-7 h-7 rounded-lg inline-flex items-center justify-center transition font-bold ${
+                  checked
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/40 animate-pop'
+                    : 'bg-slate-100 dark:bg-slate-800 text-transparent hover:border-indigo-400 border border-slate-300 dark:border-slate-700'
+                }">
+                ✓
+              </button>
+            </td>
+          `;
+        });
+
+        const autoBadgeHtml = habit.autoBadge
+          ? `<span class="ml-2 inline-block text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 border border-indigo-500/20 font-medium">${habit.autoBadge}</span>`
+          : '';
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-medium">
+            <div class="flex items-center flex-wrap gap-1">
+              <span class="mr-1.5 text-base">${habit.icon || '📌'}</span>
+              <span>${habit.name}</span>
+              ${autoBadgeHtml}
+            </div>
+          </td>
+          ${dayCells}
+          <td class="py-3 px-3 text-center font-bold text-amber-500">🔥 ${streak}日</td>
+          <td class="py-3 px-3 text-center">
+            <span class="px-2 py-1 rounded-full text-xs font-bold ${
+              rate >= 80 ? 'bg-emerald-500/10 text-emerald-500' :
+              rate >= 50 ? 'bg-indigo-500/10 text-indigo-500' :
+              'bg-slate-200 dark:bg-slate-700 text-slate-500'
+            }">${rate}%</span>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <button onclick="deleteHabit(${hIdx})" class="text-slate-400 hover:text-rose-500 transition text-xs">✕</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // 3. KPI更新
+      const maxChecks = habits.length * 7;
+      const weeklyRate = maxChecks > 0 ? Math.round((totalChecks / maxChecks) * 100) : 0;
+      document.getElementById('weeklyRateText').textContent = `${weeklyRate}%`;
+      document.getElementById('weeklyRing').textContent = `${weeklyRate}%`;
+      document.getElementById('weeklyCountText').textContent = `${totalChecks} / ${maxChecks} 完了`;
+      document.getElementById('todayCountText').textContent = `${todayChecks} / ${habits.length}`;
+      document.getElementById('bestStreakText').textContent = bestStreak;
+
+      // 4. バーチャート描画
+      const chart = document.getElementById('dailyBarChart');
+      chart.innerHTML = '';
+      DAYS.forEach((d, dIdx) => {
+        const dayDone = habits.filter(h => h.days[dIdx]).length;
+        const pct = habits.length > 0 ? Math.round((dayDone / habits.length) * 100) : 0;
+        const isToday = dIdx === todayIdx;
+
+        chart.innerHTML += `
+          <div class="flex flex-col items-center h-full justify-end gap-1.5">
+            <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">${pct}%</span>
+            <div class="w-full max-w-[42px] bg-slate-100 dark:bg-slate-800 rounded-t-lg h-24 flex items-end overflow-hidden">
+              <div class="w-full transition-all duration-300 rounded-t-lg ${
+                isToday ? 'bg-indigo-500' : 'bg-indigo-500/50'
+              }" style="height: ${pct}%"></div>
+            </div>
+            <span class="text-xs font-medium ${isToday ? 'text-indigo-500 font-bold' : 'text-slate-500'}">${d}</span>
+          </div>
+        `;
+      });
+    }
+
+    // 手動チェック切り替え
+    window.toggleCheck = function(hIdx, dIdx) {
+      habits[hIdx].days[dIdx] = !habits[hIdx].days[dIdx];
+      saveData();
+      renderAll();
+    };
+
+    // 習慣削除
+    window.deleteHabit = function(hIdx) {
+      habits.splice(hIdx, 1);
+      saveData();
+      renderAll();
+    };
+
+    // 新規習慣追加
+    document.getElementById('addHabitBtn').addEventListener('click', () => {
+      const input = document.getElementById('newHabitInput');
+      const name = input.value.trim();
+      if (!name) return;
+      habits.push({
+        id: 'custom_' + Date.now(),
+        name,
+        icon: '✨',
+        autoRule: null,
+        days: [false, false, false, false, false, false, false]
+      });
+      input.value = '';
+      saveData();
+      renderAll();
+    });
+
+    // ヘルスケアスライダー連動イベント
+    document.getElementById('moveSlider').addEventListener('input', (e) => {
+      healthMetrics.moveCalories = parseFloat(e.target.value);
+      document.getElementById('moveCurrentVal').textContent = healthMetrics.moveCalories;
+      evaluateHealthAutoRules(true);
+    });
+
+    document.getElementById('moveGoalInput').addEventListener('input', (e) => {
+      healthMetrics.moveGoal = parseFloat(e.target.value) || 500;
+      evaluateHealthAutoRules(true);
+    });
+
+    document.getElementById('sleepSlider').addEventListener('input', (e) => {
+      healthMetrics.sleepHours = parseFloat(e.target.value);
+      document.getElementById('sleepCurrentVal').textContent = healthMetrics.sleepHours;
+      evaluateHealthAutoRules(true);
+    });
+
+    // iPhone連携テストボタン（ムーブ達成＆睡眠7.5時間をシミュレート）
+    document.getElementById('syncGuideBtn').addEventListener('click', () => {
+      healthMetrics.moveCalories = 620;
+      healthMetrics.moveGoal = 500;
+      healthMetrics.sleepHours = 7.5;
+      document.getElementById('moveSlider').value = 620;
+      document.getElementById('moveCurrentVal').textContent = 620;
+      document.getElementById('moveGoalInput').value = 500;
+      document.getElementById('sleepSlider').value = 7.5;
+      document.getElementById('sleepCurrentVal').textContent = 7.5;
+      evaluateHealthAutoRules(true);
+    });
+
+    // 初期状態リセット
+    document.getElementById('resetDataBtn').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(HEALTH_STORAGE_KEY);
+      location.href = location.pathname;
+    });
+
+    // テーマ切替
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+    });
+
+    // 初回起動
+    checkUrlParamsForHealthSync();
+  </script>
+</body>
+</html>
